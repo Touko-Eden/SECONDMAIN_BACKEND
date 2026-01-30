@@ -1,42 +1,68 @@
 const Annonce = require('../models/Annonce');
 const User = require('../models/User');
 const { Op } = require('sequelize');
+const fs = require('fs');
 
 // @desc    Créer une nouvelle annonce
 // @route   POST /api/annonces
 // @access  Private
 exports.createAnnonce = async (req, res) => {
   try {
-    const { title, description, price, category, condition, location, images } = req.body;
+    const { title, description, price, category, condition, location } = req.body;
+    
+    // ---------------------------------------------------------
+    // TRAITEMENT DES IMAGES (Nouveau)
+    // ---------------------------------------------------------
+    let images = [];
+    
+    // Cas 1: Fichiers uploadés via Multipart (App Mobile)
+    if (req.files && req.files.length > 0) {
+        // Crée des URLs complètes pour l'accès public
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        images = req.files.map(file => `${baseUrl}/uploads/${file.filename}`);
+    } 
+    // Cas 2: URLs envoyées en JSON (Test ou Legacy)
+    else if (req.body.images) {
+        images = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+    }
 
-    // Validation
+    // ---------------------------------------------------------
+    // VALIDATION
+    // ---------------------------------------------------------
     if (!title || !description || !price || !category || !location) {
-      return res.status(400).json({
-        success: false,
-        message: 'Veuillez fournir tous les champs requis'
+      // Nettoyage si erreur validation
+      if (req.files) req.files.forEach(f => fs.unlinkSync(f.path));
+      
+      return res.status(400).json({ 
+          success: false, 
+          message: 'Veuillez fournir tous les champs requis (titre, description, prix, catégorie, localisation)' 
       });
     }
 
-    if (!images || !Array.isArray(images) || images.length < 3) {
-      return res.status(400).json({
-        success: false,
-        message: 'Au moins 3 images sont requises'
+    if (images.length < 3) {
+      if (req.files) req.files.forEach(f => fs.unlinkSync(f.path));
+      
+      return res.status(400).json({ 
+          success: false, 
+          message: 'Au moins 3 images sont requises' 
       });
     }
 
-    // Créer l'annonce
+    // ---------------------------------------------------------
+    // CRÉATION DE L'ANNONCE
+    // ---------------------------------------------------------
     const annonce = await Annonce.create({
       title,
       description,
-      price,
+      price: parseFloat(price), // Assure que le prix est un nombre
       category,
       condition: condition || 'Bon état',
       location,
-      images,
+      images: images, // Sequelize gère le tableau grâce à DataTypes.JSON
       userId: req.user.id
     });
 
-    // Récupérer l'annonce avec les informations du vendeur
+    // Récupérer l'annonce avec infos vendeur
     const annonceWithSeller = await Annonce.findByPk(annonce.id, {
       include: [{
         model: User,
@@ -53,6 +79,13 @@ exports.createAnnonce = async (req, res) => {
 
   } catch (error) {
     console.error('Erreur createAnnonce:', error);
+    // Nettoyage en cas d'erreur DB
+    if (req.files) {
+        req.files.forEach(f => {
+            if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
+        });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la création de l\'annonce',

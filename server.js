@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+
+
+
 // Configuration en dur (temporaire)
 process.env.PORT = 3000;
 process.env.NODE_ENV = 'development';
@@ -14,6 +17,9 @@ const annonceRoutes = require('./src/routes/annonceRoutes');
 
 // Création de l'application Express
 const app = express();
+
+// Rendre le dossier uploads accessible publiquement
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 // Middlewares
 app.use(cors()); // Permettre les requêtes cross-origin
