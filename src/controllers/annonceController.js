@@ -29,13 +29,30 @@ exports.createAnnonce = async (req, res) => {
     // ---------------------------------------------------------
     // VALIDATION
     // ---------------------------------------------------------
-    if (!title || !description || !price || !category || !location) {
+    const hasMissingRequired =
+      !title || title.toString().trim() === '' ||
+      !description || description.toString().trim() === '' ||
+      !category || category.toString().trim() === '' ||
+      !location || location.toString().trim() === '';
+
+    // Validation du prix: non vide, numérique, > 0
+    const priceNumber = typeof price === 'number' ? price : parseFloat(price);
+
+    if (hasMissingRequired || Number.isNaN(priceNumber)) {
       // Nettoyage si erreur validation
       if (req.files) req.files.forEach(f => fs.unlinkSync(f.path));
       
       return res.status(400).json({ 
           success: false, 
-          message: 'Veuillez fournir tous les champs requis (titre, description, prix, catégorie, localisation)' 
+          message: 'Veuillez fournir tous les champs requis (titre, description, prix, catégorie, localisation) avec un prix valide' 
+      });
+    }
+
+    if (priceNumber <= 0) {
+      if (req.files) req.files.forEach(f => fs.unlinkSync(f.path));
+      return res.status(400).json({
+        success: false,
+        message: 'Le prix doit être supérieur à 0'
       });
     }
 
@@ -54,7 +71,7 @@ exports.createAnnonce = async (req, res) => {
     const annonce = await Annonce.create({
       title,
       description,
-      price: parseFloat(price), // Assure que le prix est un nombre
+      price: priceNumber, // Assure que le prix est un nombre
       category,
       condition: condition || 'Bon état',
       location,
@@ -84,6 +101,14 @@ exports.createAnnonce = async (req, res) => {
         req.files.forEach(f => {
             if (fs.existsSync(f.path)) fs.unlinkSync(f.path);
         });
+    }
+
+    if (error.name === 'SequelizeValidationError') {
+      const firstMsg = error.errors?.[0]?.message || 'Données invalides';
+      return res.status(400).json({
+        success: false,
+        message: firstMsg
+      });
     }
     
     res.status(500).json({
@@ -240,16 +265,25 @@ exports.updateAnnonce = async (req, res) => {
       });
     }
 
+    // Traitement des images
+    let newImages = [];
+    if (req.files && req.files.length > 0) {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      newImages = req.files.map(file => `${baseUrl}/uploads/${file.filename}`);
+    } else if (req.body.images) {
+      newImages = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+    }
+
     // Mettre à jour les champs autorisés
-    const { title, description, price, category, condition, location, images } = req.body;
+    const { title, description, price, category, condition, location } = req.body;
 
     if (title) annonce.title = title;
     if (description) annonce.description = description;
-    if (price) annonce.price = price;
+    if (price) annonce.price = parseFloat(price);
     if (category) annonce.category = category;
     if (condition) annonce.condition = condition;
     if (location) annonce.location = location;
-    if (images) annonce.images = images;
+    if (newImages.length > 0) annonce.images = newImages;
 
     await annonce.save();
 

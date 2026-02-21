@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-
-
+const http = require('http');
+const jwt = require('jsonwebtoken');
 
 
 // Configuration en dur (temporaire)
@@ -14,9 +14,11 @@ const { testConnection, syncDatabase } = require('./src/config/database');
 // Import des routes
 const authRoutes = require('./src/routes/authRoutes');
 const annonceRoutes = require('./src/routes/annonceRoutes');
+const chatRoutes = require('./src/routes/chatRoutes');
 
-// Création de l'application Express
+// Création de l'application Express et du serveur HTTP
 const app = express();
+const server = http.createServer(app);
 
 // Rendre le dossier uploads accessible publiquement
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
@@ -25,9 +27,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 app.use(cors()); // Permettre les requêtes cross-origin
 app.use(express.json()); // Parser le JSON
 app.use(express.urlencoded({ extended: true })); // Parser les données de formulaire
-
-// Servir les fichiers statiques (images uploadées)
-app.use('/uploads', express.static(path.join(__dirname, 'src/uploads')));
 
 // Route de test
 app.get('/', (req, res) => {
@@ -45,6 +44,8 @@ app.get('/', (req, res) => {
 // Routes de l'API
 app.use('/api/auth', authRoutes);
 app.use('/api/annonces', annonceRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/favorites', favoriteRoutes);
 
 // Gestion des routes non trouvées (404)
 app.use((req, res) => {
@@ -67,6 +68,39 @@ app.use((err, req, res, next) => {
 // Définir le port
 const PORT = 3000;
 
+// Socket.IO
+const { Server } = require('socket.io');
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// partager l'instance io dans l'app pour l'utiliser dans les contrôleurs
+app.set('io', io);
+
+io.on('connection', (socket) => {
+  console.log('🔌 Nouveau client connecté:', socket.id);
+
+  socket.on('auth', (token) => {
+    try {
+      const decoded = jwt.verify(token, 'votre_secret_jwt_super_securise_237_secondmain_2025');
+      const userId = decoded.id;
+      socket.join(`user:${userId}`);
+      socket.data.userId = userId;
+      console.log(`✅ Socket authentifié, userId=${userId}`);
+    } catch (e) {
+      console.warn('❌ Auth socket invalide:', e.message);
+      socket.emit('error', { message: 'Token invalide' });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('🔌 Client déconnecté:', socket.id);
+  });
+});
+
 // Fonction pour démarrer le serveur
 const startServer = async () => {
   try {
@@ -77,7 +111,7 @@ const startServer = async () => {
     await syncDatabase();
     
     // Démarrer le serveur
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log('');
       console.log('═══════════════════════════════════════════');
       console.log(`✅ Serveur démarré sur le port ${PORT}`);
@@ -93,6 +127,10 @@ const startServer = async () => {
       console.log('   GET    /api/annonces           - Liste des annonces');
       console.log('   POST   /api/annonces           - Créer une annonce');
       console.log('   GET    /api/annonces/:id       - Détails d\'une annonce');
+      console.log('   GET    /api/chat/conversations - Mes conversations');
+      console.log('   POST   /api/chat/conversations - Démarrer une conversation');
+      console.log('   GET    /api/chat/conversations/:id/messages - Messages');
+      console.log('   POST   /api/chat/conversations/:id/messages - Envoyer un message');
       console.log('');
       console.log('🔥 Prêt à recevoir des requêtes !');
       console.log('');
