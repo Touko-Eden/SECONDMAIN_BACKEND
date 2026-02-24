@@ -16,6 +16,8 @@ const authRoutes = require('./src/routes/authRoutes');
 const annonceRoutes = require('./src/routes/annonceRoutes');
 const chatRoutes = require('./src/routes/chatRoutes');
 const favoriteRoutes = require('./src/routes/favoriteRoutes');
+const orderRoutes = require('./src/routes/orderRoutes');
+const paymentRoutes = require('./src/routes/paymentRoutes');
 
 // Création de l'application Express et du serveur HTTP
 const app = express();
@@ -47,6 +49,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/annonces', annonceRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/favorites', favoriteRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Gestion des routes non trouvées (404)
 app.use((req, res) => {
