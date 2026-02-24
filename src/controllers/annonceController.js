@@ -1,5 +1,6 @@
 const Annonce = require('../models/Annonce');
 const User = require('../models/User');
+const Favorite = require('../models/Favorite');
 const { Op } = require('sequelize');
 const fs = require('fs');
 
@@ -407,6 +408,92 @@ exports.getMyAnnonces = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération de vos annonces',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Obtenir les annonces favorites de l'utilisateur connecté
+// @route   GET /api/annonces/my/favorites
+// @access  Private
+exports.getFavorites = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      include: [{
+        model: Annonce,
+        as: 'favorites',
+        include: [{ // Inclure le vendeur pour chaque annonce favorite
+            model: User,
+            as: 'seller',
+            attributes: ['id', 'fullName', 'phone', 'location', 'avatar']
+        }]
+      }]
+    });
+
+    if (!user) {
+        return res.status(404).json({ success: false, message: 'Utilisateur non trouvé' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: user.favorites
+    });
+
+  } catch (error) {
+    console.error('Erreur getFavorites:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des favoris',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Ajouter ou retirer une annonce des favoris
+// @route   POST /api/annonces/favorites/toggle
+// @access  Private
+exports.toggleFavorite = async (req, res) => {
+  try {
+    const { annonceId } = req.body;
+    const userId = req.user.id;
+
+    if (!annonceId) {
+        return res.status(400).json({ success: false, message: 'ID de l\'annonce manquant' });
+    }
+
+    const favorite = await Favorite.findOne({
+      where: {
+        userId,
+        annonceId
+      }
+    });
+
+    let isFavorite;
+
+    if (favorite) {
+      // L'annonce est déjà en favori, on la retire
+      await favorite.destroy();
+      isFavorite = false;
+    } else {
+      // L'annonce n'est pas en favori, on l'ajoute
+      await Favorite.create({
+        userId,
+        annonceId
+      });
+      isFavorite = true;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Favori ${isFavorite ? 'ajouté' : 'retiré'} avec succès`,
+      isFavorite
+    });
+
+  } catch (error) {
+    console.error('Erreur toggleFavorite:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la mise à jour des favoris',
       error: error.message
     });
   }

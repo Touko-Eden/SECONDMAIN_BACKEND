@@ -15,6 +15,7 @@ const { testConnection, syncDatabase } = require('./src/config/database');
 const authRoutes = require('./src/routes/authRoutes');
 const annonceRoutes = require('./src/routes/annonceRoutes');
 const chatRoutes = require('./src/routes/chatRoutes');
+const favoriteRoutes = require('./src/routes/favoriteRoutes');
 
 // Création de l'application Express et du serveur HTTP
 const app = express();

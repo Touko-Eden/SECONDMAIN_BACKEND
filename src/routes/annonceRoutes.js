@@ -17,4 +17,8 @@ router.put('/:id', protect, upload.array('images', 5), annonceController.updateA
 router.delete('/:id', protect, annonceController.deleteAnnonce);
 router.get('/my/annonces', protect, annonceController.getMyAnnonces);
 
+// Routes pour les favoris
+router.get('/my/favorites', protect, annonceController.getFavorites);
+router.post('/favorites/toggle', protect, annonceController.toggleFavorite);
+
 module.exports = router;
